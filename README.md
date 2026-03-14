@@ -1,5 +1,15 @@
 # cuda-cnn-accelerator
 
+For information on `RustaCUDA`: 
+
+https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html
+
+`NVIDIA` source on parallel reductions (dividing and conquering) in `CUDA`: 
+
+https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+
+--- 
+
 Why use a proprietary solution like `CUDA` over the FOSS alternative like `OpenCL`? 
 
 I generally try to use `FOSS` where possible. For the scope of this project `CUDA` made sense for a of couple reasons:
@@ -23,11 +33,4 @@ The existence of `RustaCUDA` and there not being a real alternative for `OpenCL`
 
 Rust based CNN inference engine that offloads compute-heavy operations to the GPU using `CUDA-C` kernels. Using `RustaCUDA` bindings, supports both CPU and GPU backends for benchmarking and comparison.
 
-For information on `RustaCUDA`: 
-
-https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html
-
-`NVIDIA` source on parallel reductions (dividing and conquering) in `CUDA`: 
-
-https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
 
