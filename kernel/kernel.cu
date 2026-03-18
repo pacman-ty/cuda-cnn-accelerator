@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 
 #define INPUT_DIM 100
