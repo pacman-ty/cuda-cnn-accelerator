@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 
 #define INPUT_DIM 100
@@ -9,7 +10,7 @@
 
 // Fused convolution + ReLU kernel.
 // Each thread computes one element of the 10x20x20 output.
-// Total threads: 10 * 20 * 20 = 4000
+// Total threads 10 * 20 * 20 = 4000
 extern "C" __global__ void conv_relu(
     double input[INPUT_DIM][INPUT_DIM],
     double filters[CONV_LAYER_SIZE][FILTER_DIM][FILTER_DIM],
