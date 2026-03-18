@@ -1,7 +1,13 @@
+#![warn(clippy::all)]
+mod cnn;
+mod cpu;
+mod cuda;
+
 use std::env;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+// Takes a row from a CSV file (as text) and converts it into a vector of f64 floats
 fn convert_row(record: csv::StringRecord, len: usize) -> Result<Vec<f64>, Box<dyn Error>> {
     let row = record
         .iter()
