@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU-Accelerated CNN Inference Engine</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0a0a0a;
+    color: #e0e0e0;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  .deck {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+  }
+
+  .slide {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: none;
+    padding: 60px 80px;
+    flex-direction: column;
+    justify-content: center;
+    overflow-y: auto;
+  }
+
+  .slide.active { display: flex; }
+
+  /* Title slide */
+  .slide.title-slide {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+  }
+  .slide.title-slide h1 {
+    font-size: 3.2em;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 20px;
+    line-height: 1.2;
+  }
+  .slide.title-slide .subtitle {
+    font-size: 1.4em;
+    color: #94a3b8;
+    font-weight: 300;
+  }
+  .slide.title-slide .meta {
+    margin-top: 40px;
+    font-size: 1em;
+    color: #64748b;
+  }
+
+  /* Section slides */
+  .slide.section-slide {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  }
+  .slide.section-slide h2 {
+    font-size: 2.8em;
+    font-weight: 600;
+    color: #60a5fa;
+  }
+  .slide.section-slide .section-sub {
+    font-size: 1.2em;
+    color: #94a3b8;
+    margin-top: 12px;
+  }
+
+  /* Content slides */
+  .slide h2 {
+    font-size: 1.9em;
+    font-weight: 600;
+    color: #60a5fa;
+    margin-bottom: 30px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #1e3a5f;
+  }
+
+  .slide h3 {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #a78bfa;
+    margin-top: 22px;
+    margin-bottom: 10px;
+  }
+
+  .slide ul {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .slide ul li {
+    padding: 6px 0 6px 24px;
+    position: relative;
+    font-size: 1.05em;
+    line-height: 1.6;
+    color: #cbd5e1;
+  }
+
+  .slide ul li::before {
+    content: "\25B8";
+    position: absolute;
+    left: 0;
+    color: #60a5fa;
+    font-size: 0.9em;
+  }
+
+  .slide ul li strong {
+    color: #e2e8f0;
+  }
+
+  pre {
+    background: #111827;
+    border: 1px solid #1e3a5f;
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.82em;
+    line-height: 1.55;
+    overflow-x: auto;
+    margin: 12px 0;
+    color: #e2e8f0;
+  }
+
+  code {
+    font-family: 'Fira Code', monospace;
+    background: #1e293b;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #93c5fd;
+  }
+
+  pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin-top: 10px;
+  }
+
+  .col { }
+
+  .pipeline-diagram {
+    background: #111827;
+    border: 1px solid #1e3a5f;
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    margin: 16px 0;
+  }
+
+  .pipeline-step {
+    display: inline-block;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 0.95em;
+    margin: 4px 0;
+  }
+
+  .pipeline-step.input { background: #1e3a5f; color: #93c5fd; }
+  .pipeline-step.conv { background: #3b1f6e; color: #c4b5fd; }
+  .pipeline-step.relu { background: #3b3f1e; color: #d9f99d; }
+  .pipeline-step.output { background: #1e3f3b; color: #99f6e4; }
+  .pipeline-step.result { background: #1e3a5f; color: #93c5fd; }
+
+  .pipeline-arrow {
+    display: block;
+    color: #475569;
+    font-size: 1.4em;
+    margin: 2px 0;
+  }
+
+  .pipeline-detail {
+    font-size: 0.82em;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 0.92em;
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    background: #1e293b;
+    color: #60a5fa;
+    font-weight: 600;
+    border-bottom: 2px solid #1e3a5f;
+  }
+
+  td {
+    padding: 8px 14px;
+    border-bottom: 1px solid #1e293b;
+    color: #cbd5e1;
+  }
+
+  td:nth-child(2) {
+    font-family: 'Fira Code', monospace;
+    color: #a78bfa;
+  }
+
+  .highlight-box {
+    background: #1e293b;
+    border-left: 4px solid #60a5fa;
+    padding: 14px 20px;
+    border-radius: 0 8px 8px 0;
+    margin: 12px 0;
+    font-size: 0.95em;
+    color: #cbd5e1;
+  }
+
+  .highlight-box.green { border-left-color: #34d399; }
+  .highlight-box.purple { border-left-color: #a78bfa; }
+  .highlight-box.amber { border-left-color: #fbbf24; }
+
+  .numbered-list {
+    counter-reset: item;
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .numbered-list li {
+    padding: 6px 0 6px 36px;
+    position: relative;
+    font-size: 1em;
+    line-height: 1.6;
+    color: #cbd5e1;
+    counter-increment: item;
+  }
+
+  .numbered-list li::before {
+    content: counter(item);
+    position: absolute;
+    left: 0;
+    width: 24px;
+    height: 24px;
+    background: #1e3a5f;
+    color: #60a5fa;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 24px;
+    font-size: 0.8em;
+    font-weight: 600;
+    top: 8px;
+  }
+
+  .file-tree {
+    background: #111827;
+    border: 1px solid #1e3a5f;
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.88em;
+    line-height: 1.7;
+    color: #94a3b8;
+    margin: 10px 0;
+  }
+
+  .file-tree .mine { color: #34d399; font-weight: 500; }
+  .file-tree .given { color: #94a3b8; }
+
+  /* Nav */
+  .nav {
+    position: fixed;
+    bottom: 20px;
+    right: 30px;
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+  }
+
+  .nav button {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #94a3b8;
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1.1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .nav button:hover {
+    background: #334155;
+    color: #e2e8f0;
+  }
+
+  .slide-counter {
+    position: fixed;
+    bottom: 24px;
+    left: 30px;
+    font-size: 0.85em;
+    color: #475569;
+    font-family: 'Fira Code', monospace;
+    z-index: 100;
+  }
+
+  .progress {
+    position: fixed;
+    top: 0; left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #60a5fa, #a78bfa);
+    transition: width 0.3s ease;
+    z-index: 100;
+  }
+
+  /* QA grid */
+  .qa-item {
+    background: #111827;
+    border: 1px solid #1e3a5f;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 8px 0;
+  }
+  .qa-item .q {
+    color: #60a5fa;
+    font-weight: 600;
+    font-size: 0.95em;
+    margin-bottom: 6px;
+  }
+  .qa-item .a {
+    color: #94a3b8;
+    font-size: 0.88em;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<div class="slide-counter" id="counter"></div>
+
+<div class="deck" id="deck">
+
+<!-- ==================== SLIDE 1: TITLE ==================== -->
+<div class="slide title-slide active">
+  <h1>GPU-Accelerated CNN<br>Inference Engine</h1>
+  <div class="subtitle">Rust + CUDA from scratch</div>
+  <div class="meta">A deep dive into GPU programming and ML infrastructure</div>
+</div>
+
+<!-- ==================== SLIDE 2: ABOUT ME ==================== -->
+<div class="slide">
+  <h2>About Me</h2>
+  <ul>
+    <li>Software engineer with a focus on <strong>systems programming</strong> and <strong>cloud / infrastructure / platforms engineering</strong>/li>
+    <li>Passionate about understanding what happens <strong>beneath the abstractions</strong> we use every day</li>
+    <li>Built this project to explore the intersection of <strong>systems programming</strong>, <strong>GPU architecture</strong>, and <strong>real-world ML infrastructure</strong></li>
+    <li> Some more about me in general!</li>
+  </ul>
+</div>
+
+<!-- ==================== SLIDE 3: SECTION ==================== -->
+<div class="slide section-slide">
+  <h2>The Project</h2>
+  <div class="section-sub">What it is and why it matters</div>
+</div>
+
+<!-- ==================== SLIDE 4: OVERVIEW ==================== -->
+<div class="slide">
+  <h2>Project Overview</h2>
+  <div class="highlight-box">
+    A CNN inference engine written in Rust with a hand-written CUDA kernel for GPU acceleration.
+  </div>
+  <h3>What it does</h3>
+  <ul>
+    <li>Takes a pre-trained CNN and runs <strong>inference</strong> (forward pass) on hundreds of 100&times;100 input matrices</li>
+    <li>Produces a <strong>10-element output vector</strong> for each input</li>
+    <li>Two execution modes: <strong>CPU reference</strong> and <strong>GPU-accelerated CUDA</strong></li>
+    <li>GPU version must produce <strong>identical results</strong> to CPU (verified with floating-point tolerance)</li>
+  </ul>
+  <h3>Why it matters</h3>
+  <ul>
+    <li>CNN inference is the backbone of deployed ML &mdash; image classification, object detection, etc.</li>
+    <li>In production, inference speed is everything &mdash; CPU to GPU can mean real-time vs. unusable</li>
+    <li>Forced me to understand what happens underneath PyTorch/TensorFlow when calling <code>model.forward()</code></li>
+  </ul>
+</div>
+
+<!-- ==================== SLIDE 5: CNN PIPELINE ==================== -->
+<div class="slide">
+  <h2>The CNN Pipeline</h2>
+  <div class="two-col">
+    <div class="col">
+      <div class="pipeline-diagram">
+        <div class="pipeline-step input">100 &times; 100 Input Matrix</div>
+        <div class="pipeline-arrow">&darr;</div>
+        <div class="pipeline-step conv">Convolution Layer</div>
+        <div class="pipeline-detail">10 filters of 5&times;5 &rarr; 10 &times; 20 &times; 20</div>
+        <div class="pipeline-arrow">&darr;</div>
+        <div class="pipeline-step relu">ReLU Activation</div>
+        <div class="pipeline-detail">Clamp negatives to 0</div>
+        <div class="pipeline-arrow">&darr;</div>
+        <div class="pipeline-step output">Output Layer</div>
+        <div class="pipeline-detail">10 neurons &times; 4,000 weights each</div>
+        <div class="pipeline-arrow">&darr;</div>
+        <div class="pipeline-step result">10 &times; 1 Output Vector</div>
+      </div>
+    </div>
+    <div class="col">
+      <h3>Key Constants</h3>
+      <table>
+        <tr><th>Constant</th><th>Value</th><th>Meaning</th></tr>
+        <tr><td>INPUT_DIM</td><td>100</td><td>Input is 100&times;100</td></tr>
+        <tr><td>FILTER_DIM</td><td>5</td><td>Conv filter is 5&times;5</td></tr>
+        <tr><td>CONV_OUT_DIM</td><td>20</td><td>100/5 = 20&times;20 per filter</td></tr>
+        <tr><td>CONV_LAYER_SIZE</td><td>10</td><td>10 convolution filters</td></tr>
+        <tr><td>OUT_NEURON_DIM</td><td>4000</td><td>Flattened conv output</td></tr>
+        <tr><td>OUT_LAYER_SIZE</td><td>10</td><td>10 output neurons</td></tr>
+      </table>
+      <div class="highlight-box purple">
+        All computation uses <code>f64</code> (double precision) on both CPU and GPU.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 6: TECH CHOICES ==================== -->
+<div class="slide">
+  <h2>Technology Choices</h2>
+  <div class="two-col">
+    <div class="col">
+      <h3>Why Rust?</h3>
+      <ul>
+        <li><strong>Memory safety</strong> without garbage collection &mdash; critical for manual GPU memory management</li>
+        <li><strong>Ownership model</strong> prevents data races at compile time between host and device</li>
+        <li><strong>Zero-cost abstractions</strong> &mdash; iterators and closures compile to the same code as hand-written C</li>
+        <li><code>rustacuda</code> crate &mdash; safe Rust bindings over CUDA's C driver API</li>
+      </ul>
+      <h3>Why CUDA?</h3>
+      <ul>
+        <li>NVIDIA target with the most <strong>mature tooling</strong></li>
+        <li>Direct control over <strong>thread hierarchy</strong>, shared memory, and synchronization</li>
+        <li>CNN pipeline maps naturally to CUDA's execution model</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h3>Why not PyTorch / TensorFlow?</h3>
+      <ul>
+        <li>Goal was to understand <strong>what those frameworks do internally</strong></li>
+        <li>Writing kernels by hand forces you to think about memory access patterns, thread mapping, and reduction</li>
+        <li>The difference between <strong>using</strong> a tool and <strong>understanding</strong> a tool</li>
+      </ul>
+      <div class="highlight-box green" style="margin-top: 30px;">
+        <strong>Key insight:</strong> Rust's type system extends safety to the GPU boundary. The <code>DeviceCopy</code> trait prevents accidentally copying types with pointers to device memory.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 7: SECTION ==================== -->
+<div class="slide section-slide">
+  <h2>Architecture &amp; Design</h2>
+  <div class="section-sub">How the pieces fit together</div>
+</div>
+
+<!-- ==================== SLIDE 8: PROJECT STRUCTURE ==================== -->
+<div class="slide">
+  <h2>Project Structure</h2>
+  <div class="two-col">
+    <div class="col">
+      <div class="file-tree">
+        <span class="given">src/</span><br>
+        <span class="given">&ensp;&ensp;main.rs</span> &mdash; CLI, CSV I/O, orchestration<br>
+        <span class="given">&ensp;&ensp;cnn.rs</span>&ensp; &mdash; Data structures &amp; constants<br>
+        <span class="given">&ensp;&ensp;cpu.rs</span>&ensp; &mdash; Reference CPU implementation<br>
+        <span class="mine">&ensp;&ensp;cuda.rs</span> &mdash; CUDA bridge (my code)<br>
+        <br>
+        <span class="given">kernel/</span><br>
+        <span class="mine">&ensp;&ensp;kernel.cu</span> &mdash; CUDA kernels (my code)<br>
+        <br>
+        <span class="given">build.rs</span>&ensp;&ensp; &mdash; Compiles .cu &rarr; .ptx at build time
+      </div>
+      <div class="highlight-box" style="margin-top: 16px;">
+        <span style="color: #34d399;">Green</span> = GPU implementation (core work)<br>
+        <span style="color: #94a3b8;">Gray</span> = Host-side scaffolding
+      </div>
+    </div>
+    <div class="col">
+      <h3>Design Patterns</h3>
+      <ul>
+        <li><strong>Strategy Pattern via Closures</strong> &mdash; <code>for_each_input()</code> takes a closure that decides CPU vs GPU at runtime. I/O logic is decoupled from computation</li>
+        <li><strong>Newtype + <code>#[repr(transparent)]</code></strong> &mdash; structs have identical memory layout to inner arrays, enabling zero-cost <code>memcpy</code> to GPU</li>
+        <li><strong>RAII for GPU Resources</strong> &mdash; <code>CudaContext</code> owns all device memory; Rust's drop ordering frees everything automatically</li>
+        <li><strong>Build-time Codegen</strong> &mdash; <code>nvcc</code> compiles CUDA to PTX at build time, embedded into the binary via <code>include_str!()</code></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 9: RAII / DROP ORDERING ==================== -->
+<div class="slide">
+  <h2>RAII &amp; Drop Ordering</h2>
+  <div class="two-col">
+    <div class="col">
+      <pre><code>pub struct CudaContext {
+    // GPU memory -- dropped FIRST
+    input_matrix:  DeviceBox&lt;InputMatrix&gt;,
+    conv_output:   DeviceBox&lt;ConvOutput&gt;,
+    output:        DeviceBox&lt;OutputVec&gt;,
+    conv_layer:    DeviceBox&lt;ConvLayer&gt;,
+    output_layer:  DeviceBox&lt;OutputLayer&gt;,
+
+    module: Module,
+    stream: Stream,
+
+    // CUDA context -- dropped LAST
+    _context: Context,
+}</code></pre>
+    </div>
+    <div class="col">
+      <h3>Why order matters</h3>
+      <ul>
+        <li>Rust drops struct fields in <strong>declaration order</strong></li>
+        <li>GPU memory (<code>DeviceBox</code>) must be freed <strong>before</strong> the CUDA context that owns it</li>
+        <li>If <code>_context</code> drops first &rarr; <strong>segfault</strong> (freeing device memory after context is gone)</li>
+        <li>This is a Rust-specific subtlety &mdash; in C++ CUDA you manually call <code>cudaFree</code> then <code>cudaDeviceReset</code></li>
+      </ul>
+      <div class="highlight-box amber" style="margin-top: 16px;">
+        <strong>The underscore prefix</strong> in <code>_context</code> tells Rust "I'm keeping this alive for its side effects (drop behavior), not because I use it directly."
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 10: SECTION ==================== -->
+<div class="slide section-slide">
+  <h2>The CUDA Kernels</h2>
+  <div class="section-sub">The core of the implementation</div>
+</div>
+
+<!-- ==================== SLIDE 11: KERNEL 1 ==================== -->
+<div class="slide">
+  <h2>Kernel 1: Fused Convolution + ReLU</h2>
+  <div class="two-col">
+    <div class="col">
+      <pre><code>__global__ void conv_relu(
+    double input[100][100],
+    double filters[10][5][5],
+    double output[10][20][20]
+) {
+    int tid = blockIdx.x * blockDim.x
+            + threadIdx.x;
+    if (tid >= 4000) return;
+
+    // Decompose 1D thread ID -> 3D index
+    int f     = tid / (20 * 20);
+    int rem   = tid % (20 * 20);
+    int out_r = rem / 20;
+    int out_c = rem % 20;
+
+    int in_r = out_r * 5;
+    int in_c = out_c * 5;
+
+    // 5x5 dot product
+    double sum = 0.0;
+    for (int x = 0; x < 5; x++)
+      for (int y = 0; y < 5; y++)
+        sum += input[in_r+x][in_c+y]
+             * filters[f][x][y];
+
+    // Fused ReLU
+    output[f][out_r][out_c] =
+        (sum > 0.0) ? sum : 0.0;
+}</code></pre>
+    </div>
+    <div class="col">
+      <h3>Design Decisions</h3>
+      <ul>
+        <li><strong>4,000 threads</strong> &mdash; one per output element (10 filters &times; 20 &times; 20), all completely independent</li>
+        <li><strong>1D &rarr; 3D mapping</strong> &mdash; flat thread ID decomposed via division/modulo into (filter, row, col)</li>
+        <li><strong>Fused ReLU</strong> &mdash; CPU has convolution and ReLU as separate passes; fusing avoids writing 4,000 doubles to global memory and reading them back</li>
+        <li>Each thread does one <strong>5&times;5 dot product</strong> (25 multiply-adds) &mdash; small enough to keep in registers</li>
+      </ul>
+      <div class="highlight-box green" style="margin-top: 16px;">
+        <strong>Kernel fusion</strong> is a key GPU optimization. Eliminating the intermediate write/read saves ~64KB of global memory traffic per inference.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 12: KERNEL 2 ==================== -->
+<div class="slide">
+  <h2>Kernel 2: Output Layer &mdash; Shared-Memory Reduction</h2>
+  <div class="two-col">
+    <div class="col">
+      <pre><code>__global__ void output_layer(
+    double* conv_output,
+    double weights[10][4000],
+    double* result
+) {
+    __shared__ double partial[256];
+    int neuron = blockIdx.x;
+    int tid    = threadIdx.x;
+
+    // Phase 1: strided accumulation
+    double sum = 0.0;
+    for (int i = tid; i < 4000; i += 256)
+        sum += conv_output[i]
+             * weights[neuron][i];
+    partial[tid] = sum;
+    __syncthreads();
+
+    // Phase 2: tree reduction
+    for (int s = 128; s > 0; s >>= 1) {
+        if (tid < s)
+            partial[tid] += partial[tid + s];
+        __syncthreads();
+    }
+
+    if (tid == 0)
+        result[neuron] = partial[0];
+}</code></pre>
+    </div>
+    <div class="col">
+      <h3>Two-Phase Strategy</h3>
+      <ul>
+        <li><strong>10 blocks</strong> (one per output neuron), <strong>256 threads</strong> each</li>
+        <li><strong>Phase 1:</strong> Each thread accumulates ~16 elements with stride loop &mdash; coalesced access, even work distribution</li>
+        <li><strong>Phase 2:</strong> Classic tree reduction in shared memory &mdash; halves active threads each step: 128 &rarr; 64 &rarr; ... &rarr; 1</li>
+      </ul>
+      <h3>Why shared memory?</h3>
+      <ul>
+        <li><code>__shared__</code> is on-chip SRAM &mdash; <strong>~100x faster</strong> than global memory</li>
+        <li>Partial sums stay on-chip during the entire reduction</li>
+        <li>O(log n) parallel steps vs O(n) sequential &mdash; 8 steps instead of 256</li>
+      </ul>
+      <div class="highlight-box amber" style="margin-top: 10px;">
+        <strong>Critical:</strong> <code>__syncthreads()</code> must be outside conditionals. If placed inside <code>if (tid &lt; s)</code>, threads that skip it never hit the barrier &rarr; deadlock.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 13: RUST-CUDA BRIDGE ==================== -->
+<div class="slide">
+  <h2>Rust-CUDA Bridge</h2>
+  <div class="two-col">
+    <div class="col">
+      <h3>Initialization (once)</h3>
+      <ol class="numbered-list">
+        <li>Initialize CUDA runtime &amp; select GPU 0</li>
+        <li>Create CUDA context (owns all GPU state)</li>
+        <li>Load compiled PTX kernel module</li>
+        <li>Create non-blocking stream</li>
+        <li>Pre-allocate all GPU memory buffers</li>
+        <li><strong>Copy CNN weights to GPU</strong> (persist across all calls)</li>
+      </ol>
+      <div class="highlight-box green" style="margin-top: 14px;">
+        CNN weights are copied <strong>once</strong>. Only the input matrix transfers per inference call.
+      </div>
+    </div>
+    <div class="col">
+      <h3>Per-Inference Call</h3>
+      <ol class="numbered-list">
+        <li>Copy input matrix CPU &rarr; GPU</li>
+        <li>Launch <code>conv_relu</code> kernel (4,000 threads)</li>
+        <li>Launch <code>output_layer</code> kernel (10 &times; 256 threads)</li>
+        <li>Synchronize stream (wait for GPU)</li>
+        <li>Copy 10-element result GPU &rarr; CPU</li>
+      </ol>
+      <div class="highlight-box" style="margin-top: 14px;">
+        Both kernels launch on the <strong>same stream</strong> &mdash; CUDA guarantees serial execution. Only <strong>one</strong> <code>synchronize()</code> needed at the end.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 14: SECTION ==================== -->
+<div class="slide section-slide">
+  <h2>Quality &amp; Reliability</h2>
+  <div class="section-sub">Ensuring correctness across CPU and GPU</div>
+</div>
+
+<!-- ==================== SLIDE 15: CORRECTNESS ==================== -->
+<div class="slide">
+  <h2>Ensuring Correctness</h2>
+  <div class="two-col">
+    <div class="col">
+      <h3>Testing Workflow</h3>
+      <pre><code># Generate 250 random 100x100 inputs
+python3 generate.py
+
+# Run CPU reference
+cargo run --release -- cpu \
+  input/cnn.csv input/in.csv \
+  output/out.csv
+
+# Run GPU implementation
+cargo run --release -- cuda \
+  input/cnn.csv input/in.csv \
+  output/out_cuda.csv
+
+# Element-wise comparison
+python3 compare.py
+# uses math.isclose() tolerance</code></pre>
+    </div>
+    <div class="col">
+      <h3>Why floating-point tolerance?</h3>
+      <ul>
+        <li>FP addition is <strong>not associative</strong>: <code>(a+b)+c &ne; a+(b+c)</code></li>
+        <li>GPU sums in different order (parallel tree reduction vs sequential)</li>
+        <li>Small rounding differences accumulate over 4,000-element dot products</li>
+        <li><code>math.isclose()</code> handles this with relative + absolute tolerance</li>
+      </ul>
+      <h3>Memory Safety via Rust</h3>
+      <ul>
+        <li>No manual <code>malloc</code>/<code>free</code> &mdash; <code>DeviceBox</code> handles allocation via RAII</li>
+        <li>Borrow checker prevents host/device data races at compile time</li>
+        <li>Only <code>unsafe</code>: <code>launch!</code> macro calls and <code>DeviceCopy</code> trait impls (both justified by type layout guarantees)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SLIDE 16: CHALLENGES ==================== -->
+<div class="slide">
+  <h2>Most Challenging Parts</h2>
+  <ul>
+    <li><strong>Drop ordering for GPU resources</strong> &mdash; If CUDA <code>Context</code> drops before <code>DeviceBox</code> allocations, the driver panics. Fix: declare <code>DeviceBox</code> fields first in the struct. A subtle Rust-specific footgun that doesn't exist in C/C++ CUDA</li>
+    <li><strong>Thread-to-data mapping</strong> &mdash; Decomposing a flat 1D thread ID into the correct 3D (filter, row, col) index, then mapping back to the right 5&times;5 input region. Wrong division/modulo = garbage output with no error &mdash; it's all legal memory access, just wrong indices</li>
+    <li><strong>Shared-memory reduction correctness</strong> &mdash; <code>__syncthreads()</code> must be reached by <strong>every thread</strong> in the block. Placing it inside a conditional branch causes deadlock because inactive threads never hit the barrier</li>
+    <li><strong>Debugging GPU code</strong> &mdash; No practical <code>printf</code> debugging on device. Process: verify thread math on paper, test with small inputs, check memory layouts between Rust and CUDA, add temporary copy-backs to inspect intermediate results</li>
+  </ul>
+</div>
+
+<!-- ==================== SLIDE 17: IMPROVEMENTS ==================== -->
+<div class="slide">
+  <h2>What I'd Improve With More Time</h2>
+  <ul>
+    <li><strong>Batch processing</strong> &mdash; Currently one matrix per kernel launch (~5&ndash;10&mu;s overhead each). With 250 inputs, that's 500 launches. Batching into 2 launches would amortize this cost dramatically</li>
+    <li><strong>Shared memory for convolution</strong> &mdash; Load input tiles into shared memory to reduce redundant global memory reads when multiple filters access overlapping regions</li>
+    <li><strong>Warp-level reduction</strong> &mdash; Last 5 reduction steps (32 elements = 1 warp) execute in lockstep. Using <code>__shfl_down_sync</code> instead of <code>__syncthreads()</code> would eliminate barrier stalls</li>
+    <li><strong>Stream overlap</strong> &mdash; Use multiple CUDA streams to overlap data transfer of input N+1 with computation of input N, hiding transfer latency</li>
+    <li><strong>f32 / f16 precision modes</strong> &mdash; Consumer GPUs have up to 32x more f32 throughput than f64. Adding a single-precision mode would be a massive speedup for applications where reduced precision is acceptable</li>
+  </ul>
+</div>
+
+<!-- ==================== SLIDE 18: TAKEAWAYS ==================== -->
+<div class="slide">
+  <h2>Key Takeaways</h2>
+  <ul>
+    <li><strong>GPU programming is about data movement, not just parallelism</strong> &mdash; Minimizing host-device transfers (copy weights once) and fusing kernels (conv + ReLU) mattered more than the parallel algorithms themselves</li>
+    <li><strong>Rust's ownership model extends to GPU resources</strong> &mdash; RAII for device memory, compile-time enforcement of ownership, <code>DeviceCopy</code> trait preventing unsafe memcpy of pointer types</li>
+    <li><strong>Understanding what frameworks abstract away is valuable</strong> &mdash; After writing convolution by hand, I have deeper intuition for why certain layer configurations are fast/slow, why batch size matters, and what GPU utilization means</li>
+    <li><strong>A reference implementation makes GPU debugging tractable</strong> &mdash; Every bug could be isolated by comparing CPU vs GPU output. Without this, debugging would be guessing in the dark</li>
+  </ul>
+</div>
+
+<!-- ==================== SLIDE 19: END ==================== -->
+<div class="slide title-slide">
+  <h1>Thank You</h1>
+  <div class="subtitle">Questions?</div>
+</div>
+
+</div>
+
+<div class="nav">
+  <button onclick="prev()" title="Previous (Left Arrow)">&#8592;</button>
+  <button onclick="next()" title="Next (Right Arrow)">&#8594;</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let current = 0;
+
+  function show(n) {
+    slides[current].classList.remove('active');
+    current = Math.max(0, Math.min(n, slides.length - 1));
+    slides[current].classList.add('active');
+    document.getElementById('counter').textContent = (current + 1) + ' / ' + slides.length;
+    document.getElementById('progress').style.width = ((current + 1) / slides.length * 100) + '%';
+  }
+
+  function next() { show(current + 1); }
+  function prev() { show(current - 1); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    if (e.key === 'Home') { e.preventDefault(); show(0); }
+    if (e.key === 'End') { e.preventDefault(); show(slides.length - 1); }
+  });
+
+  show(0);
+</script>
+
+</body>
+</html>
